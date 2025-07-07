@@ -1,5 +1,9 @@
 package com.example.speechdemo.controller;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpEntity;
+import org.springframework.web.client.RestTemplate;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,8 +32,17 @@ public class SpeechController {
         }
 
         try {
-            // Simulate token generation (replace with actual Azure SDK logic)
-            String token = "mock-token"; // Replace with actual token generation logic
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Ocp-Apim-Subscription-Key", azureSpeechKey);
+            headers.set("Content-Type", "application/x-www-form-urlencoded");
+
+            RestTemplate restTemplate = new RestTemplate();
+            HttpEntity<String> entity = new HttpEntity<>(null, headers);
+
+            String url = "https://" + azureRegion + ".api.cognitive.microsoft.com/sts/v1.0/issueToken";
+            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+
+            String token = response.getBody();
             return ResponseEntity.ok().body("{\"token\": \"" + token + "\", \"region\": \"" + azureRegion + "\"}");
         } catch (Exception e) {
             return ResponseEntity.status(401).body("There was an error authorizing your speech key.");
