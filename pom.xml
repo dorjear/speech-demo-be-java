@@ -39,6 +39,8 @@
             <artifactId>client-sdk</artifactId>
             <version>1.43.0</version>
         </dependency>
+        <!-- ffmpeg is required for audio conversion. Please ensure ffmpeg is installed on your system and available in the PATH. -->
+        <!-- No Java dependency for ffmpeg; will use ProcessBuilder to call it. -->
         <!-- File Upload -->
         <dependency>
             <groupId>commons-fileupload</groupId>

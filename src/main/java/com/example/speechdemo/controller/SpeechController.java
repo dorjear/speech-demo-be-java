@@ -55,25 +55,67 @@ public class SpeechController {
             return ResponseEntity.badRequest().body("No file uploaded.");
         }
 
+        Path uploadPath = Paths.get("uploads");
         try {
-            // Save the uploaded file
-            Path uploadPath = Paths.get("uploads");
             if (!Files.exists(uploadPath)) {
                 Files.createDirectories(uploadPath);
             }
 
-            String webmFileName = file.getOriginalFilename();
+            // Save the uploaded .webm file
+            String webmFileName = System.currentTimeMillis() + "-" + file.getOriginalFilename();
             Path webmFilePath = uploadPath.resolve(webmFileName);
             Files.write(webmFilePath, file.getBytes());
 
-            // Simulate conversion to WAV (replace with actual logic)
+            // Convert .webm to .wav using ffmpeg
             String wavFileName = webmFileName.replace(".webm", ".wav");
             Path wavFilePath = uploadPath.resolve(wavFileName);
-            Files.write(wavFilePath, "mock-wav-content".getBytes()); // Replace with actual conversion logic
+            ProcessBuilder pb = new ProcessBuilder(
+                    "ffmpeg", "-y", "-i", webmFilePath.toString(), wavFilePath.toString()
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                return ResponseEntity.status(500).body("Error converting file to WAV.");
+            }
 
-            return ResponseEntity.ok().body("File uploaded and converted to WAV: " + wavFileName);
-        } catch (IOException e) {
+            // Use Azure Speech SDK to transcribe the .wav file
+            String recognizedText = recognizeSpeech(wavFilePath.toString());
+            if (recognizedText == null) {
+                return ResponseEntity.status(500).body("Could not transcribe the audio file.");
+            }
+
+            // Clean up files
+            Files.deleteIfExists(webmFilePath);
+            Files.deleteIfExists(wavFilePath);
+
+            return ResponseEntity.ok().body("{\"DisplayText\": \"" + recognizedText + "\"}");
+        } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.status(500).body("Error processing audio file.");
+        }
+    }
+
+    // Helper method to use Azure Speech SDK
+    private String recognizeSpeech(String wavFilePath) {
+        try {
+            com.microsoft.cognitiveservices.speech.SpeechConfig speechConfig =
+                    com.microsoft.cognitiveservices.speech.SpeechConfig.fromSubscription(azureSpeechKey, azureRegion);
+            speechConfig.setSpeechRecognitionLanguage("en-US");
+            com.microsoft.cognitiveservices.speech.audio.AudioConfig audioConfig =
+                    com.microsoft.cognitiveservices.speech.audio.AudioConfig.fromWavFileInput(wavFilePath);
+            com.microsoft.cognitiveservices.speech.SpeechRecognizer recognizer =
+                    new com.microsoft.cognitiveservices.speech.SpeechRecognizer(speechConfig, audioConfig);
+            com.microsoft.cognitiveservices.speech.SpeechRecognitionResult result = recognizer.recognizeOnceAsync().get();
+            recognizer.close();
+            if (result.getReason() == com.microsoft.cognitiveservices.speech.ResultReason.RecognizedSpeech) {
+                return result.getText();
+            } else {
+                return null;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
         }
     }
 
